@@ -1,17 +1,23 @@
-import os
-import json
 import config
 
 from diarization_code.diarization import run_diarization
 from regex_code.regex_parser import run_regex_parser
 from diarization_code.bert_code import compute_bert_score_from_json
 
-from Common.paths import get_grouped_output_path, get_bert_output_path
+from Common.paths import (
+    get_grouped_output_path,
+    get_bert_output_path,
+    get_diarized_output_path,
+    get_regex_output_path,
+)
 
 
-def main():
+def run_pipeline(audio_file):
+    """
+    Run diarization -> BERT score -> regex extraction.
 
-    audio_file = config.DEFAULT_AUDIO_FILE
+    Returns a UI-friendly payload plus output paths.
+    """
 
     # ========================================================
     # STEP 1
@@ -23,8 +29,12 @@ def main():
     )
 
     grouped_data = diarization_result["grouped"]
+    transcriptions = diarization_result["diarized"]
 
     grouped_output_path = get_grouped_output_path(
+        audio_file
+    )
+    diarized_output_path = get_diarized_output_path(
         audio_file
     )
 
@@ -57,6 +67,10 @@ def main():
         audio_file
     )
 
+    regex_output_path = get_regex_output_path(
+        audio_file
+    )
+
     # ========================================================
     # COMPLETE
     # ========================================================
@@ -72,10 +86,22 @@ def main():
     )
 
     return {
-        "diarization": diarization_result,
+        "transcriptions": transcriptions,
+        "comparison_mode": "paragraph",
+        "total_score": bert_result.get("bert_score"),
         "regex": regex_result,
-        "bert_score": bert_result
+        "bert_score": bert_result,
+        "outputs": {
+            "diarized": diarized_output_path,
+            "grouped": grouped_output_path,
+            "bert_score": bert_output_path,
+            "regex": regex_output_path,
+        },
     }
+
+
+def main():
+    return run_pipeline(config.DEFAULT_AUDIO_FILE)
 
 
 if __name__ == "__main__":
