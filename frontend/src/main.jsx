@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import '../styles.css';
 
 const MAX_UPLOAD_BYTES = 100 * 1024 * 1024;
-const API_BASE = (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000').replace(/\/$/, '');
+const API_BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '');
 
 const WAVE_HEIGHTS = [
   18, 34, 52, 28, 66, 40, 78, 55, 30, 62, 44, 86, 58, 36, 70, 48, 82, 60, 32, 74,
@@ -44,8 +44,11 @@ function App() {
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [durationLabel, setDurationLabel] = useState('00:00');
   const [currentLabel, setCurrentLabel] = useState('00:00');
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
   const audioRef = useRef(null);
+  const waveformRef = useRef(null);
+  const wasPlayingBeforeDragRef = useRef(false);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -110,8 +113,8 @@ function App() {
         } catch {
           throw new Error(
             response.status === 404
-              ? 'API not found. Start the backend with: uvicorn api:app --reload --port 8000'
-              : `Backend returned non-JSON (HTTP ${response.status}). Is uvicorn running on port 8000?`,
+              ? 'API route not found. Check that the backend is running.'
+              : `Backend returned non-JSON (HTTP ${response.status}).`,
           );
         }
       }
@@ -130,7 +133,7 @@ function App() {
       const message = requestError.message || 'Could not connect to the diarization service.';
       setError(
         /Failed to fetch|NetworkError|fetch/i.test(message)
-          ? 'Cannot reach API at http://127.0.0.1:8000. Start it with: uvicorn api:app --reload --port 8000'
+          ? 'Cannot reach the API. Check that the backend is running and reachable.'
           : message,
       );
     } finally {
@@ -138,24 +141,32 @@ function App() {
     }
   }
 
-  async function handlePlayStream() {
+  async function handlePlayAudioPreview() {
     setError('');
 
     if (!selectedFile) {
-      setError('Select a WAV file to play the stream.');
+      setError('Select a WAV file to listen to the audio.');
       return;
     }
 
-    await runDiarization();
+    if (!audioRef.current || !previewUrl) {
+      setError('Audio preview is not ready yet.');
+      return;
+    }
 
-    if (audioRef.current && previewUrl) {
+    if (audioRef.current.paused) {
       try {
         await audioRef.current.play();
         setIsPlaying(true);
       } catch {
         setIsPlaying(false);
+        setError('This browser blocked playback. Try clicking the button again.');
       }
+      return;
     }
+
+    audioRef.current.pause();
+    setIsPlaying(false);
   }
 
   function handleTimeUpdate() {
@@ -165,6 +176,58 @@ function App() {
     setPlaybackProgress(progress);
     setCurrentLabel(ticksToClock(audio.currentTime * 10_000_000));
     setDurationLabel(ticksToClock(audio.duration * 10_000_000));
+  }
+
+  function seekAudioAtPointer(clientX) {
+    const audio = audioRef.current;
+    const waveform = waveformRef.current;
+    if (!audio || !audio.duration || !waveform) return;
+
+    const bounds = waveform.getBoundingClientRect();
+    const relativeX = Math.min(Math.max(clientX - bounds.left, 0), bounds.width);
+    const progress = bounds.width ? relativeX / bounds.width : 0;
+    const nextTime = Math.min(Math.max(progress * audio.duration, 0), audio.duration);
+
+    audio.currentTime = nextTime;
+    setPlaybackProgress(progress);
+    setCurrentLabel(ticksToClock(nextTime * 10_000_000));
+  }
+
+  function handleWaveformPointerDown(event) {
+    if (!selectedFile) return;
+
+    const audio = audioRef.current;
+    wasPlayingBeforeDragRef.current = !!audio && !audio.paused;
+
+    if (audio && !audio.paused) {
+      audio.pause();
+      setIsPlaying(false);
+    }
+
+    setIsDragging(true);
+    seekAudioAtPointer(event.clientX);
+    event.preventDefault();
+  }
+
+  function handleWaveformPointerMove(event) {
+    if (!isDragging) return;
+    seekAudioAtPointer(event.clientX);
+  }
+
+  async function handleWaveformPointerUp() {
+    setIsDragging(false);
+
+    const audio = audioRef.current;
+    if (!audio || !wasPlayingBeforeDragRef.current) return;
+
+    try {
+      await audio.play();
+      setIsPlaying(true);
+    } catch {
+      setIsPlaying(false);
+    }
+
+    wasPlayingBeforeDragRef.current = false;
   }
 
   const transcriptItems = useMemo(() => {
@@ -233,18 +296,7 @@ function App() {
           <p>Evolution Mining — Haulage Safety Pilot</p>
         </div>
         <div className="kpi-row">
-          <div className="kpi-card">
-            <span>Shift Coverage</span>
-            <strong>100% Automated</strong>
-          </div>
-          <div className="kpi-card">
-            <span>% Compliant (Shift)</span>
-            <strong>92%</strong>
-          </div>
-          <div className="kpi-card">
-            <span>Avg Review Cycle</span>
-            <strong>1.2 s</strong>
-          </div>
+          {/* KPI values intentionally disabled until verified business metrics are available. */}
         </div>
       </header>
 
@@ -291,28 +343,59 @@ function App() {
             )}
           </div>
 
-          <button
-            className={`play-btn${isProcessing ? ' is-busy' : ''}`}
-            type="button"
-            onClick={handlePlayStream}
-            disabled={isProcessing || !selectedFile}
-          >
-            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              {isProcessing ? (
-                <path d="M4 4h4v12H4V4Zm8 0h4v12h-4V4Z" fill="currentColor" />
-              ) : (
-                <path d="M6 4.5v11l10-5.5L6 4.5Z" fill="currentColor" />
-              )}
-            </svg>
-            <span>{isProcessing ? 'Processing Stream' : 'Play Audio Stream'}</span>
-          </button>
+          <div className="action-row">
+            <button
+              className={`secondary-btn${isPlaying ? ' is-playing' : ''}`}
+              type="button"
+              onClick={handlePlayAudioPreview}
+              disabled={isProcessing || !selectedFile}
+            >
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                {isPlaying ? (
+                  <path d="M4 4h4v12H4V4Zm8 0h4v12h-4V4Z" fill="currentColor" />
+                ) : (
+                  <path d="M6 4.5v11l10-5.5L6 4.5Z" fill="currentColor" />
+                )}
+              </svg>
+              <span>{isPlaying ? 'Pause Audio' : 'Listen Audio'}</span>
+            </button>
+
+            <button
+              className={`primary-btn${isProcessing ? ' is-busy' : ''}`}
+              type="button"
+              onClick={runDiarization}
+              disabled={isProcessing || !selectedFile}
+            >
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                {isProcessing ? (
+                  <path d="M4 4h4v12H4V4Zm8 0h4v12h-4V4Z" fill="currentColor" />
+                ) : (
+                  <path d="M6 4.5v11l10-5.5L6 4.5Z" fill="currentColor" />
+                )}
+              </svg>
+              <span>{isProcessing ? 'Processing...' : 'Start Process'}</span>
+            </button>
+          </div>
 
           <div className="waveform-card">
             <div className="waveform-header">
               <span>Audio Waveform</span>
               <span>{currentLabel} / {durationLabel}</span>
             </div>
-            <div className="waveform-canvas" aria-hidden="true">
+            <div
+              ref={waveformRef}
+              className="waveform-canvas"
+              aria-label="Audio waveform scrubber"
+              role="slider"
+              tabIndex={0}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(playbackProgress * 100)}
+              onPointerDown={handleWaveformPointerDown}
+              onPointerMove={handleWaveformPointerMove}
+              onPointerUp={handleWaveformPointerUp}
+              onPointerLeave={handleWaveformPointerUp}
+            >
               <div className="wave-bars">
                 {WAVE_HEIGHTS.map((height, index) => (
                   <span

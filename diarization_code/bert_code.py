@@ -19,7 +19,7 @@ config = configparser.ConfigParser()
 
 config.read(
     os.path.join(
-        os.path.dirname(__file__),
+        os.path.dirname(os.path.dirname(__file__)),
         "config.ini"
     )
 )
@@ -70,6 +70,7 @@ LLM_MODEL_NAME = config.get(
     "llm_model",
     fallback="bert-base-uncased"
 )
+LLM_MODEL_NAME = os.environ.get("MODEL_NAME", LLM_MODEL_NAME)
 
 tokenizer = AutoTokenizer.from_pretrained(
     LLM_MODEL_NAME

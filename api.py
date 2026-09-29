@@ -17,6 +17,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from Common.paths import (
     INPUT_DIR,
@@ -36,16 +37,20 @@ app = FastAPI(
     version="1.0.0",
 )
 
+default_cors_origins = (
+    "http://localhost:5173,http://127.0.0.1:5173,"
+    "http://localhost:4173,http://127.0.0.1:4173,"
+    "http://localhost:5500,http://127.0.0.1:5500"
+)
+cors_origins = [
+    origin.strip()
+    for origin in os.environ.get("CORS_ORIGINS", default_cors_origins).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:4173",
-        "http://127.0.0.1:4173",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -257,3 +262,8 @@ def get_results(job_id: str):
             "regex": regex_path if regex is not None else None,
         },
     }
+
+
+frontend_dist = Path(__file__).resolve().parent / "frontend" / "dist"
+if frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

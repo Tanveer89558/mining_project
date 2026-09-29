@@ -13,13 +13,17 @@ BASE_DIR = os.path.dirname(
     )
 )
 
+DATA_DIR = os.path.abspath(
+    os.path.expanduser(os.environ.get("APP_DATA_DIR", BASE_DIR))
+)
+
 INPUT_DIR = os.path.join(
-    BASE_DIR,
+    DATA_DIR,
     "input"
 )
 
 OUTPUT_DIR = os.path.join(
-    BASE_DIR,
+    DATA_DIR,
     "output"
 )
 
