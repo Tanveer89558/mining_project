@@ -77,6 +77,12 @@ AMBIGUOUS_PATTERN = re.compile(
     re.IGNORECASE
 )
 
+ACKNOWLEDGMENT_PATTERN = re.compile(
+    r"\b(?:copy\s+(?:that|this)|acknowledged|roger\s+that|"
+    r"confirmed|understood)\b",
+    re.IGNORECASE
+)
+
 
 # ============================================================
 # O -> 0
@@ -283,6 +289,16 @@ def parse_conversation(data):
         guest2_messages
     )
 
+    guest1_text = " ".join(
+        convert_o_to_zero(msg)
+        for msg in guest1_messages
+    )
+
+    acknowledgment = extract_keyword(
+        ACKNOWLEDGMENT_PATTERN,
+        guest1_text
+    )
+
     flag, mismatches = compare_speaker_details(
         guest1_details,
         guest2_details
@@ -297,6 +313,10 @@ def parse_conversation(data):
         return {
 
             "flag": "Mis Matched",
+
+            "status": "Mis Matched",
+
+            "acknowledgment": acknowledgment,
 
             "mismatches": mismatches,
 
@@ -325,28 +345,30 @@ def parse_conversation(data):
         "flag": "Matched",
 
         "truck_id":
-            guest1_details["truck_id"],
+            guest1_details["truck_id"] or guest2_details["truck_id"],
 
         "shovel_id":
-            guest1_details["shovel_id"],
+            guest1_details["shovel_id"] or guest2_details["shovel_id"],
 
         "pocket_id":
-            guest1_details["pocket_id"],
+            guest1_details["pocket_id"] or guest2_details["pocket_id"],
 
         "equipment_id":
-            guest1_details["equipment_id"],
+            guest1_details["equipment_id"] or guest2_details["equipment_id"],
 
         "bench":
-            guest1_details["bench"],
+            guest1_details["bench"] or guest2_details["bench"],
 
         "level":
-            guest1_details["level"],
+            guest1_details["level"] or guest2_details["level"],
 
         "movement":
-            guest1_details["movement"],
+            guest1_details["movement"] or guest2_details["movement"],
 
         "loading":
-            guest1_details["loading"],
+            guest1_details["loading"] or guest2_details["loading"],
+
+        "acknowledgment": acknowledgment,
 
         "status": status
     }
