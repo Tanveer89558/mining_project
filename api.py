@@ -6,17 +6,21 @@ Endpoints:
   POST /api/process             upload + run full pipeline (UI)
   POST /api/process/{job_id}    run pipeline on a prior upload
   GET  /api/results/{job_id}    pull processed JSON artifacts
+  GET  /api/export/{job_id}     download all JSON artifacts as a ZIP
   GET  /api/health              liveness check
 """
 
+import io
 import json
 import os
 import re
 import traceback
+import zipfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from Common.paths import (
@@ -262,6 +266,53 @@ def get_results(job_id: str):
             "regex": regex_path if regex is not None else None,
         },
     }
+
+
+@app.get("/api/export/{job_id}")
+def export_training(job_id: str):
+    """
+    Download all generated JSON artifacts for a job as a ZIP archive.
+    """
+
+    cleaned_job_id = _safe_stem(job_id)
+    audio_path = get_input_audio_path(f"{cleaned_job_id}.wav")
+
+    artifacts = [
+        (f"{cleaned_job_id}_diarized.json", get_diarized_output_path(audio_path)),
+        (f"{cleaned_job_id}_grouped.json", get_grouped_output_path(audio_path)),
+        (f"{cleaned_job_id}_bert_score.json", get_bert_output_path(audio_path)),
+        (f"{cleaned_job_id}_regex.json", get_regex_output_path(audio_path)),
+    ]
+
+    existing = [
+        (name, path)
+        for name, path in artifacts
+        if os.path.isfile(path)
+    ]
+
+    if not existing:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No processed JSON found for job '{cleaned_job_id}'. "
+                "Upload and process the audio first."
+            ),
+        )
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, path in existing:
+            archive.write(path, arcname=name)
+    buffer.seek(0)
+
+    zip_name = f"{cleaned_job_id}_training_export.zip"
+    return Response(
+        content=buffer.getvalue(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{zip_name}"',
+        },
+    )
 
 
 frontend_dist = Path(__file__).resolve().parent / "frontend" / "dist"

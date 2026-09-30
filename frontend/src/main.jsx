@@ -37,6 +37,7 @@ function formatSpeakerLabel(raw, index) {
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
@@ -138,6 +139,50 @@ function App() {
       );
     } finally {
       setIsProcessing(false);
+    }
+  }
+
+  async function exportToTraining() {
+    if (!result?.job_id || isExporting) return;
+
+    setError('');
+    setIsExporting(true);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/export/${encodeURIComponent(result.job_id)}`);
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        let message = 'Could not export training files.';
+        if (contentType.includes('application/json')) {
+          const data = await response.json();
+          const detail = data?.detail;
+          message = typeof detail === 'string'
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((item) => item.msg || JSON.stringify(item)).join('; ')
+              : message;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `${result.job_id}_training_export.zip`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (exportError) {
+      const message = exportError.message || 'Could not export training files.';
+      setError(
+        /Failed to fetch|NetworkError|fetch/i.test(message)
+          ? 'Cannot reach the API. Check that the backend is running and reachable.'
+          : message,
+      );
+    } finally {
+      setIsExporting(false);
     }
   }
 
@@ -263,10 +308,12 @@ function App() {
   }, [result]);
 
   const riskScore = useMemo(() => {
-    if (result?.total_score != null) {
-      return Number(result.total_score);
-    }
-    return null;
+    const similarity = result?.total_score != null ? Number(result.total_score) : null;
+
+    if (similarity == null) return null;
+
+    const derivedRisk = 1 - similarity;
+    return Number(Math.max(0, Math.min(1, derivedRisk)).toFixed(4));
   }, [result]);
 
   const extractedEntities = useMemo(() => {
@@ -291,7 +338,6 @@ function App() {
   const protocolSteps = useMemo(() => {
     const status = result?.regex?.status;
     const isProceed = status === 'PROCEED';
-    const isAcknowledged = isProceed && Boolean(result?.regex?.acknowledgment);
     const isAmbiguous = status === 'AMBIGUOUS';
     const isHold = status === 'HOLD';
     const isMismatch = result?.regex?.flag === 'Mis Matched';
@@ -306,7 +352,7 @@ function App() {
             : null;
 
     const passedIndices = isProceed
-      ? isAcknowledged ? [0, 1, 2] : [0, 1]
+      ? [0, 1, 2]
       : isMismatch
         ? [0]
         : isAmbiguous
@@ -315,13 +361,9 @@ function App() {
             ? [0]
             : [];
 
-    const failedIndices = isProceed
-      ? []
-      : isMismatch
+    const failedIndices = isMismatch
         ? [1, 2]
-        : isAmbiguous
-          ? [1]
-          : isHold
+        : isHold
             ? [0, 1, 2]
             : [];
 
@@ -329,24 +371,26 @@ function App() {
       {
         id: '1',
         label: 'CALLOUT',
-        description: 'Vehicle ID + intent stated',
-        state: isProceed || isMismatch ? 'PASS' : isAmbiguous ? 'FAIL' : 'PASS',
+        description: 'Vehicle ID + Intent stated',
+        state: result ? 'PASS' : 'WAIT',
       },
       {
         id: '2',
         label: 'CLEARANCE',
-        description: 'Ambiguous - no explicit keyword',
-        state: isProceed ? 'PASS' : isAmbiguous || isMismatch ? 'FAIL' : 'PASS',
+        description: 'Explicit keyword',
+        state: !result ? 'WAIT' : isMismatch ? 'FAIL' : isAmbiguous ? 'READY' : 'PASS',
       },
       {
         id: '3',
         label: 'ACKNOWLEDGEMENT',
         description: 'Proceeding under confirmed standard',
-        state: isAcknowledged ? 'PASS' : isMismatch ? 'FAIL' : 'READY',
+        state: !result ? 'WAIT' : isMismatch ? 'FAIL' : isAmbiguous ? 'WAIT' : 'PASS',
       },
     ].map((step, index) => ({
       ...step,
-      isActive: activeIndex === index,
+      isActive: activeIndex === index
+        && !passedIndices.includes(index)
+        && !failedIndices.includes(index),
       isPassed: passedIndices.includes(index),
       isFailed: failedIndices.includes(index),
     }));
@@ -360,7 +404,11 @@ function App() {
 
   const reasoningText = useMemo(() => {
     if (!result) return 'Evaluator reasoning will appear after diarization completes.';
-    return `Paragraph comparison complete. Similarity between the first two speakers is ${Number(result.total_score || 0).toFixed(3)} on a 0–1 scale.`;
+
+    const similarity = Number(result.total_score || 0);
+    const risk = Math.max(0, Math.min(1, 1 - similarity));
+
+    return `Paragraph comparison complete. BERT similarity is ${similarity.toFixed(3)}, so derived risk is ${risk.toFixed(3)} on a 0–1 scale.`;
   }, [result]);
 
   const alertTitle = result
@@ -376,7 +424,7 @@ function App() {
       : 'Upload a WAV recording, then play the stream to run diarization.';
 
   const statusText = isProcessing
-    ? 'LIVE STATUS: PROCESSING PaaS STREAM...'
+    ? 'LIVE STATUS: PROCESSING AUDIO STREAM...'
     : result
       ? 'LIVE STATUS: DIARIZATION COMPLETE'
       : selectedFile
@@ -428,8 +476,13 @@ function App() {
             RISK SCORE{' '}
             <em>{riskScore == null ? '—' : riskScore.toFixed(2)}</em>
           </div>
-          <button className="export-btn" type="button" disabled={!result}>
-            Export to Training
+          <button
+            className="export-btn"
+            type="button"
+            onClick={exportToTraining}
+            disabled={!result?.job_id || isExporting}
+          >
+            {isExporting ? 'Exporting...' : 'Export to Training'}
           </button>
         </div>
       </section>
@@ -619,7 +672,7 @@ function App() {
             <h3>Evaluator Reasoning</h3>
             <p>{reasoningText}</p>
             <div className="reasoning-footer">
-              risk_score: {riskScore == null ? '—' : riskScore.toFixed(2)}
+              Risk Score: {riskScore == null ? '—' : riskScore.toFixed(2)}
             </div>
           </div>
         </section>
