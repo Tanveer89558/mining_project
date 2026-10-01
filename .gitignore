@@ -22,7 +22,8 @@ diarization-venv/
 
 #Datasets
 Dataset/
-test_data/
+# Keep test_data sample WAVs in the repo so Docker/UI demos work.
+# test_data/
 
 
 # Python Build
@@ -155,9 +156,12 @@ ruff_cache/
 # Audio / Video / Image Files
 # =========================
 *.wav
+!test_data/*.wav
 *.mp3
 *.flac
 *.mp4
 
 *config.ini
 *config.py
+
+*.zip

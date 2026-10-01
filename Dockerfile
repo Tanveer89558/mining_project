@@ -26,9 +26,14 @@ RUN pip install --no-cache-dir --timeout 120 --retries 5 --trusted-host download
     && pip install --no-cache-dir --timeout 120 --retries 5 -r requirements.txt
 
 COPY . ./
+# Demo scenario WAVs used by the UI sample picker (/api/samples).
+COPY test_data/ ./test_data/
 COPY --from=frontend-build /build/frontend/dist ./frontend/dist
 
-RUN mkdir -p /mnt/data/input /mnt/data/output
+RUN mkdir -p /mnt/data/input /mnt/data/output \
+    && test -f /app/test_data/ack_noisy_testfile.wav \
+    && test -f /app/test_data/unack_noisy_testfile.wav \
+    && test -f /app/test_data/mm_noisy_testfile.wav
 
 EXPOSE 8000
 CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -10,7 +10,7 @@ The solution ships as a FastAPI backend plus a React (Vite) frontend. You can ru
 
 1. [What this project does](#what-this-project-does)
 2. [Architecture](#architecture)
-3. [Models and services](#models-and-services)
+3. [Workable scenarios](#example-scenarios)
 4. [Program flow](#program-flow)
 5. [Input and output](#input-and-output)
 6. [Project structure](#project-structure)
@@ -28,9 +28,13 @@ The solution ships as a FastAPI backend plus a React (Vite) frontend. You can ru
 
 | Stage | Responsibility |
 | --- | --- |
-| 1. Diarization | Azure Speech Conversation Transcriber splits the WAV into speaker-labeled segments and applies mining term normalization |
-| 2. BERT score | A Hugging Face BERT encoder embeds Guest-1 and Guest-2 full conversations and returns cosine similarity (0.0–1.0) |
-| 3. Regex extraction | Pattern matching extracts equipment IDs and protocol keywords, then compares Guest-1 vs Guest-2 for mismatches |
+| 1. Input audio ingestion | Accept a WAV upload (UI or API), validate format/size, and save it under `input/` for processing |
+| 2. Diarization | Azure Speech Conversation Transcriber splits the WAV into speaker-labeled segments and applies mining term normalization |
+| 3. BERT score | A Hugging Face BERT encoder embeds Guest-1 and Guest-2 full conversations and returns cosine similarity (0.0–1.0) |
+| 4. Regex extraction | Pattern matching extracts equipment IDs and protocol keywords, then compares Guest-1 vs Guest-2 for mismatches |
+| 5. UI prompt / alert | Surface transcript, risk score, extracted entities, and protocol status (PROCEED / HOLD / AMBIGUOUS / Mis Matched) in the dashboard alert and panels |
+
+**What this POC achieves:** A reusable haulage radio-compliance starter that proves end-to-end voice AI for pit safety — giving teams about a **20% jumpstart** on future mining voice solutions through shared pipeline, UI, and protocol patterns they can reuse and extend.
 
 ---
 
@@ -38,29 +42,29 @@ The solution ships as a FastAPI backend plus a React (Vite) frontend. You can ru
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Frontend (React / Vite)                   │
-│                   Upload WAV → call POST /api/process            │
+│                        Frontend (React / Vite)                  │
+│                   Upload WAV → call POST /api/process           │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     FastAPI backend (api.py)                     │
-│         Validate WAV → save to input/ → run_pipeline()           │
+│                     FastAPI backend (api.py)                    │
+│         Validate WAV → save to input/ → run_pipeline()          │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Pipeline (main.py)                          │
-│                                                                  │
+│                      Pipeline (main.py)                         │
+│                                                                 │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────┐ │
-│  │ 1. Diarization   │──▶│ 2. BERT score    │──▶│ 3. Regex     │ │
+│  │ 1. Diarization   │──▶│ 2. BERT score    │──▶│ 3. Regex    │ │
 │  │ Azure Speech     │   │ HF BERT encoder  │   │ Entity/status│ │
 │  │ + term mappings  │   │ cosine similarity│   │ extraction   │ │
 │  └────────┬─────────┘   └────────┬─────────┘   └──────┬───────┘ │
-│           │                      │                     │         │
-│           ▼                      ▼                     ▼         │
-│   *_diarized.json         *_bert_score.json      *_regex.json    │
-│   *_grouped.json                                                 │
+│           │                      │                     │        │
+│           ▼                      ▼                     ▼        │
+│   *_diarized.json         *_bert_score.json      *_regex.json   │
+│   *_grouped.json                                                │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -78,9 +82,7 @@ The solution ships as a FastAPI backend plus a React (Vite) frontend. You can ru
 | Paths | `Common/paths.py` | Resolves `input/` and `output/` (respects `APP_DATA_DIR`) |
 | Config | `config.py`, `config.ini`, `.env` | Azure credentials and BERT model name |
 
----
-
-## Models and services
+### Models and services
 
 | Name | Type | Purpose in this solution | Source / default |
 | --- | --- | --- | --- |
@@ -96,6 +98,66 @@ The solution ships as a FastAPI backend plus a React (Vite) frontend. You can ru
 | Turn audio into speaker-labeled text | Azure Speech Conversation Transcriber |
 | Measure semantic agreement between speakers | BERT encoder + cosine similarity |
 | Extract mining entities and protocol status | Regex rules (+ mappings for cleaner text) |
+
+---
+
+## Workable scenarios
+
+These three radio clips show how the system decides whether a haul truck entry is safe to continue. Each story is written for a non-technical reader. In the product, you upload the WAV, run the process, and read the protocol status on screen.
+
+### Scenario A — Compliant entry (`ack_noisy_testfile.wav`)
+
+**As a** pit safety reviewer, **I want** the system to recognise a complete and clear radio handoff, **so that** a correct entry is marked safe to proceed.
+
+What happens on the radio:
+
+1. The haul truck driver calls shovel **02** and says truck **104** is entering pocket **3** for loading.
+2. The shovel operator answers clearly: truck **104**, shovel **02**, proceed to pocket **3**.
+3. The driver confirms: “Proceed, thank you.”
+
+What the system should show: **PROCEED** — truck, shovel, and pocket match on both sides, and the shovel gives a clear go-ahead.
+
+---
+
+### Scenario B — Unacknowledged / vague reply (`unack_noisy_testfile.wav`)
+
+**As a** pit safety reviewer, **I want** the system to flag a lazy or unclear reply, **so that** nobody treats a vague “yeah, copy” as a real clearance.
+
+What happens on the radio:
+
+1. The haul truck driver calls out: shovel **02**, truck **104** entering pocket **3**.
+2. There is a long pause.
+3. The shovel operator answers casually: “Yeah… copy mate.” — not a clear “proceed.”
+
+What the system should show: **AMBIGUOUS** — the callout is heard, but the reply is soft and unclear, so the entry should not be treated as fully cleared.
+
+---
+
+### Scenario C — Wrong truck number (`mm_noisy_testfile.wav`)
+
+**As a** pit safety reviewer, **I want** the system to catch when the shovel repeats the wrong truck ID, **so that** a mismatched clearance is stopped before the truck moves in.
+
+What happens on the radio:
+
+1. The haul truck driver says: shovel **02**, truck **104** entering pocket **3**.
+2. The shovel operator answers confidently but names the wrong truck: truck **105**, shovel **02**, proceed to pocket **3**.
+3. The driver sounds unsure: “Copy that.”
+
+What the system should show: **Mis Matched** — the shovel approved a different truck number than the one that called in.
+
+| File | Story in one line | Expected status |
+| --- | --- | --- |
+| `ack_noisy_testfile.wav` | Clear callout, clear proceed, clear thanks | **PROCEED** |
+| `unack_noisy_testfile.wav` | Clear callout, vague “yeah / copy mate” reply | **AMBIGUOUS** |
+| `mm_noisy_testfile.wav` | Clear callout, shovel says truck **105** instead of **104** | **Mis Matched** |
+
+Place the WAV files under `test_data/` when you want to walk through these stories. The UI lists them as **Demo scenarios** so you can pick a clip without uploading; you can still use **Choose file** for any other WAV.
+
+| Demo scenario in UI | File under `test_data/` | Expected status |
+| --- | --- | --- |
+| Scenario A — Compliant entry | `ack_noisy_testfile.wav` | **PROCEED** |
+| Scenario B — Unacknowledged / vague reply | `unack_noisy_testfile.wav` | **AMBIGUOUS** |
+| Scenario C — Wrong truck number | `mm_noisy_testfile.wav` | **Mis Matched** |
 
 ---
 

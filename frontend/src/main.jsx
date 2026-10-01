@@ -36,6 +36,8 @@ function formatSpeakerLabel(raw, index) {
 
 function App() {
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedSample, setSelectedSample] = useState(null);
+  const [samples, setSamples] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -51,23 +53,54 @@ function App() {
   const waveformRef = useRef(null);
   const wasPlayingBeforeDragRef = useRef(false);
 
+  const hasAudioSource = Boolean(selectedFile || selectedSample);
+
   useEffect(() => {
-    if (!selectedFile) {
-      setPreviewUrl('');
-      setPlaybackProgress(0);
-      setCurrentLabel('00:00');
-      setDurationLabel('00:00');
+    let cancelled = false;
+
+    async function loadSamples() {
+      try {
+        const response = await fetch(`${API_BASE}/api/samples`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (!cancelled) setSamples(Array.isArray(data?.samples) ? data.samples : []);
+      } catch {
+        if (!cancelled) setSamples([]);
+      }
+    }
+
+    loadSamples();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setPlaybackProgress(0);
+    setCurrentLabel('00:00');
+    setDurationLabel('00:00');
+    setIsPlaying(false);
+
+    if (selectedFile) {
+      const objectUrl = URL.createObjectURL(selectedFile);
+      setPreviewUrl(objectUrl);
+      return () => URL.revokeObjectURL(objectUrl);
+    }
+
+    if (selectedSample?.audio_url) {
+      setPreviewUrl(`${API_BASE}${selectedSample.audio_url}`);
       return undefined;
     }
-    const objectUrl = URL.createObjectURL(selectedFile);
-    setPreviewUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [selectedFile]);
+
+    setPreviewUrl('');
+    return undefined;
+  }, [selectedFile, selectedSample]);
 
   function chooseFile(file) {
     if (!file) return;
     setError('');
     setResult(null);
+    setSelectedSample(null);
     if (!file.name.toLowerCase().endsWith('.wav')) {
       setError('Choose a WAV audio file to continue.');
       return;
@@ -83,22 +116,36 @@ function App() {
     setSelectedFile(file);
   }
 
+  function chooseSample(sample) {
+    if (!sample || isProcessing) return;
+    setError('');
+    setResult(null);
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    setSelectedSample(sample);
+  }
+
   function clearFile() {
     setSelectedFile(null);
+    setSelectedSample(null);
     setResult(null);
     setIsPlaying(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   async function runDiarization() {
-    if (!selectedFile || isProcessing) return;
+    if ((!selectedFile && !selectedSample) || isProcessing) return;
 
     setError('');
     setResult(null);
     setIsProcessing(true);
 
     const payload = new FormData();
-    payload.append('audio', selectedFile);
+    if (selectedSample) {
+      payload.append('sample_id', selectedSample.id);
+    } else {
+      payload.append('audio', selectedFile);
+    }
 
     try {
       const response = await fetch(`${API_BASE}/api/process`, { method: 'POST', body: payload });
@@ -189,8 +236,8 @@ function App() {
   async function handlePlayAudioPreview() {
     setError('');
 
-    if (!selectedFile) {
-      setError('Select a WAV file to listen to the audio.');
+    if (!hasAudioSource) {
+      setError('Select a WAV file or scenario sample to listen to the audio.');
       return;
     }
 
@@ -239,7 +286,7 @@ function App() {
   }
 
   function handleWaveformPointerDown(event) {
-    if (!selectedFile) return;
+    if (!hasAudioSource) return;
 
     const audio = audioRef.current;
     wasPlayingBeforeDragRef.current = !!audio && !audio.paused;
@@ -417,17 +464,19 @@ function App() {
       ? 'PROCESSING AUDIO STREAM'
       : 'READY: AWAITING AUDIO STREAM';
 
+  const selectedLabel = selectedSample?.filename || selectedFile?.name || 'Recording';
+
   const alertSub = result
-    ? `${selectedFile?.name || 'Recording'} · ${result.transcriptions?.length || 0} segments`
+    ? `${selectedLabel} · ${result.transcriptions?.length || 0} segments`
     : isProcessing
       ? 'Speaker separation and comparison may take a few minutes.'
-      : 'Upload a WAV recording, then play the stream to run diarization.';
+      : 'Pick a scenario sample or upload a WAV, then play the stream to run diarization.';
 
   const statusText = isProcessing
     ? 'LIVE STATUS: PROCESSING AUDIO STREAM...'
     : result
       ? 'LIVE STATUS: DIARIZATION COMPLETE'
-      : selectedFile
+      : hasAudioSource
         ? 'LIVE STATUS: READY TO PLAY STREAM'
         : 'LIVE STATUS: IDLE';
 
@@ -492,6 +541,36 @@ function App() {
           <h2 className="panel-heading" id="stream-heading">Stream Control & Audio</h2>
 
           <div className="file-row">
+            {samples.length > 0 && (
+              <div className="sample-picker" role="group" aria-label="Built-in scenario samples">
+                <p className="sample-picker-label">Demo scenarios</p>
+                <div className="sample-picker-grid">
+                  {samples.map((sample) => {
+                    const isActive = selectedSample?.id === sample.id;
+                    return (
+                      <button
+                        key={sample.id}
+                        type="button"
+                        className={`sample-chip${isActive ? ' is-active' : ''}`}
+                        onClick={() => chooseSample(sample)}
+                        disabled={isProcessing}
+                        title={sample.summary}
+                      >
+                        <span className="sample-chip-title">{sample.label}</span>
+                        <span className="sample-chip-meta">
+                          Expects {sample.expected_status}
+                          {typeof sample.size_bytes === 'number'
+                            ? ` · ${formatBytes(sample.size_bytes)}`
+                            : ''}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <p className="sample-picker-label">Or choose your own file</p>
             <input
               ref={fileInputRef}
               className="file-field"
@@ -499,9 +578,13 @@ function App() {
               accept=".wav,audio/wav,audio/x-wav"
               onChange={(event) => chooseFile(event.target.files?.[0])}
             />
-            {selectedFile && (
+            {hasAudioSource && (
               <div className="file-meta">
-                <span>{selectedFile.name} · {formatBytes(selectedFile.size)}</span>
+                <span>
+                  {selectedSample
+                    ? `${selectedSample.filename} · demo sample`
+                    : `${selectedFile.name} · ${formatBytes(selectedFile.size)}`}
+                </span>
                 <button className="clear-file" type="button" onClick={clearFile}>Clear</button>
               </div>
             )}
@@ -512,7 +595,7 @@ function App() {
               className={`secondary-btn${isPlaying ? ' is-playing' : ''}`}
               type="button"
               onClick={handlePlayAudioPreview}
-              disabled={isProcessing || !selectedFile}
+              disabled={isProcessing || !hasAudioSource}
             >
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 {isPlaying ? (
@@ -528,7 +611,7 @@ function App() {
               className={`primary-btn${isProcessing ? ' is-busy' : ''}`}
               type="button"
               onClick={runDiarization}
-              disabled={isProcessing || !selectedFile}
+              disabled={isProcessing || !hasAudioSource}
             >
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                 {isProcessing ? (

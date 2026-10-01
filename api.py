@@ -3,8 +3,10 @@ FastAPI backend for Mining Voice AI pipeline.
 
 Endpoints:
   POST /api/upload              save WAV for later processing
-  POST /api/process             upload + run full pipeline (UI)
+  POST /api/process             upload or sample + run full pipeline (UI)
   POST /api/process/{job_id}    run pipeline on a prior upload
+  GET  /api/samples             list built-in scenario WAV files
+  GET  /api/samples/{id}/audio  stream a built-in scenario WAV
   GET  /api/results/{job_id}    pull processed JSON artifacts
   GET  /api/export/{job_id}     download all JSON artifacts as a ZIP
   GET  /api/health              liveness check
@@ -14,16 +16,18 @@ import io
 import json
 import os
 import re
+import shutil
 import traceback
 import zipfile
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from Common.paths import (
+    BASE_DIR,
     INPUT_DIR,
     OUTPUT_DIR,
     get_bert_output_path,
@@ -35,6 +39,33 @@ from Common.paths import (
 
 ALLOWED_EXTENSIONS = {".wav"}
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+TEST_DATA_DIR = os.path.join(BASE_DIR, "test_data")
+
+# Built-in demos mapped to files under test_data/ (Scenario A/B/C in README).
+SAMPLE_SCENARIOS = [
+    {
+        "id": "scenario_a",
+        "filename": "ack_noisy_testfile.wav",
+        "label": "Scenario A — Compliant entry",
+        "expected_status": "PROCEED",
+        "summary": "Clear callout, clear proceed, clear thanks",
+    },
+    {
+        "id": "scenario_b",
+        "filename": "unack_noisy_testfile.wav",
+        "label": "Scenario B — Unacknowledged / vague reply",
+        "expected_status": "AMBIGUOUS",
+        "summary": 'Clear callout, vague "yeah / copy mate" reply',
+    },
+    {
+        "id": "scenario_c",
+        "filename": "mm_noisy_testfile.wav",
+        "label": "Scenario C — Wrong truck number",
+        "expected_status": "Mis Matched",
+        "summary": "Clear callout, shovel repeats a different truck ID",
+    },
+]
+SAMPLE_BY_ID = {item["id"]: item for item in SAMPLE_SCENARIOS}
 
 app = FastAPI(
     title="Mining Voice AI API",
@@ -90,6 +121,59 @@ def _load_json(path: str):
 
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _sample_source_path(sample: dict) -> str:
+    return os.path.join(TEST_DATA_DIR, sample["filename"])
+
+
+def _available_samples() -> list[dict]:
+    samples = []
+    for sample in SAMPLE_SCENARIOS:
+        path = _sample_source_path(sample)
+        if not os.path.isfile(path):
+            continue
+        samples.append(
+            {
+                **sample,
+                "size_bytes": os.path.getsize(path),
+                "audio_url": f"/api/samples/{sample['id']}/audio",
+            }
+        )
+    return samples
+
+
+def _resolve_sample(sample_id: str) -> dict:
+    cleaned = (sample_id or "").strip().lower()
+    sample = SAMPLE_BY_ID.get(cleaned)
+    if sample is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown sample '{sample_id}'.",
+        )
+
+    path = _sample_source_path(sample)
+    if not os.path.isfile(path):
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"Sample file '{sample['filename']}' is missing from test_data/. "
+                "Place the WAV there and restart the API."
+            ),
+        )
+
+    return sample
+
+
+def _stage_sample(sample_id: str) -> tuple[str, str]:
+    sample = _resolve_sample(sample_id)
+    source_path = _sample_source_path(sample)
+    job_id = _safe_stem(sample["filename"])
+    audio_path = get_input_audio_path(f"{job_id}.wav")
+
+    os.makedirs(INPUT_DIR, exist_ok=True)
+    shutil.copy2(source_path, audio_path)
+    return job_id, audio_path
 
 
 async def _save_upload(audio: UploadFile) -> tuple[str, str]:
@@ -153,7 +237,32 @@ def health():
         "status": "ok",
         "input_dir": INPUT_DIR,
         "output_dir": OUTPUT_DIR,
+        "samples_available": len(_available_samples()),
     }
+
+
+@app.get("/api/samples")
+def list_samples():
+    """
+    List built-in scenario WAVs present under test_data/.
+    """
+
+    return {"samples": _available_samples()}
+
+
+@app.get("/api/samples/{sample_id}/audio")
+def get_sample_audio(sample_id: str):
+    """
+    Stream a built-in scenario WAV for UI preview playback.
+    """
+
+    sample = _resolve_sample(sample_id)
+    path = _sample_source_path(sample)
+    return FileResponse(
+        path,
+        media_type="audio/wav",
+        filename=sample["filename"],
+    )
 
 
 @app.post("/api/upload")
@@ -174,15 +283,33 @@ async def upload_audio(audio: UploadFile = File(...)):
 
 @app.post("/api/process")
 async def process_upload(
-    audio: UploadFile = File(...),
+    audio: UploadFile | None = File(None),
+    sample_id: str | None = Form(None),
 ):
     """
-    Upload a WAV and immediately run the full pipeline.
-
-    Matches the current frontend FormData contract: audio
+    Run the full pipeline from either:
+      - uploaded WAV (Form field: audio), or
+      - built-in sample (Form field: sample_id)
     """
 
-    job_id, audio_path = await _save_upload(audio)
+    has_upload = audio is not None and bool(audio.filename)
+    has_sample = bool((sample_id or "").strip())
+
+    if has_upload and has_sample:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide either an uploaded WAV or a sample_id, not both.",
+        )
+    if not has_upload and not has_sample:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose a WAV file or pick a built-in scenario sample.",
+        )
+
+    if has_sample:
+        job_id, audio_path = _stage_sample(sample_id)
+    else:
+        job_id, audio_path = await _save_upload(audio)
 
     try:
         pipeline_result = _run_pipeline(audio_path)

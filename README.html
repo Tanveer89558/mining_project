@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mining Voice AI — README</title>
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --surface: #ffffff;
+    --ink: #1c2430;
+    --muted: #5b6675;
+    --line: #d8dde5;
+    --accent: #0f6b5c;
+    --accent-soft: #e6f3ef;
+    --code-bg: #f0f3f7;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at top left, #e8f2ee 0, transparent 42%),
+      linear-gradient(180deg, #f8f6f1 0%, var(--bg) 100%);
+    line-height: 1.6;
+  }
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 2rem 2.1rem 2.4rem;
+    box-shadow: 0 10px 30px rgba(28, 36, 48, 0.06);
+  }
+  h1 {
+    margin: 0 0 0.75rem;
+    font-size: 2.1rem;
+    letter-spacing: -0.02em;
+    color: #10231f;
+  }
+  h2 {
+    margin: 2.4rem 0 0.9rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--line);
+    font-size: 1.45rem;
+    color: #12352e;
+  }
+  h1 + p, h1 + p + p { color: var(--muted); }
+  h3 {
+    margin: 1.6rem 0 0.6rem;
+    font-size: 1.12rem;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: 1.6rem 0;
+  }
+  code {
+    font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+    font-size: 0.92em;
+    background: var(--code-bg);
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+  }
+  pre {
+    background: #152028;
+    color: #e8eef4;
+    padding: 1rem 1.1rem;
+    border-radius: 10px;
+    overflow-x: auto;
+    border: 1px solid #24313c;
+  }
+  pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font-size: 0.86rem;
+    line-height: 1.5;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.9rem 0 1.2rem;
+    font-size: 0.95rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  th, td {
+    border-bottom: 1px solid var(--line);
+    border-right: 1px solid var(--line);
+    padding: 0.7rem 0.8rem;
+    vertical-align: top;
+    text-align: left;
+  }
+  th:last-child, td:last-child { border-right: 0; }
+  tr:last-child td { border-bottom: 0; }
+  th {
+    background: var(--accent-soft);
+    color: #12352e;
+    font-weight: 650;
+  }
+  tr:nth-child(even) td { background: #fafbfc; }
+  ul, ol { padding-left: 1.3rem; }
+  li { margin: 0.25rem 0; }
+  strong { color: #10231f; }
+  .toc {
+    background: var(--accent-soft);
+    border: 1px solid #cfe4dc;
+    border-radius: 10px;
+    padding: 0.9rem 1.1rem 1rem;
+  }
+  .badge {
+    display: inline-block;
+    margin-bottom: 1rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: white;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  @media (max-width: 720px) {
+    .card { padding: 1.25rem 1rem 1.6rem; }
+    h1 { font-size: 1.7rem; }
+    table { display: block; overflow-x: auto; }
+  }
+  @media print {
+    body { background: white; }
+    .card { box-shadow: none; border: 0; padding: 0; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <article class="card">
+      <div class="badge">Project README</div>
+      <h1 id="mining-voice-ai">Mining Voice AI</h1>
+<p>Mining Voice AI processes two-speaker mining radio conversations from WAV audio. It diarizes speakers, measures semantic agreement between them, extracts operational entities (truck, shovel, pocket, bench, level), and returns a protocol status such as <strong>PROCEED</strong>, <strong>AMBIGUOUS</strong>, or <strong>Mis Matched</strong>.</p>
+<p>The solution ships as a FastAPI backend plus a React (Vite) frontend. You can run the full pipeline from the UI, the REST API, or the CLI (<code>main.py</code>).</p>
+<hr />
+<h2 id="table-of-contents">Table of contents</h2>
+<ol>
+<li><a href="#what-this-project-does">What this project does</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#Workable-scenarios">Workable scenarios</a></li>
+<li><a href="#program-flow">Program flow</a></li>
+</ol>
+<hr />
+<h2 id="what-this-project-does">What this project does</h2>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. Input audio ingestion</td>
+<td>Accept a WAV upload (UI or API), validate format/size, and save it under <code>input/</code> for processing</td>
+</tr>
+<tr>
+<td>2. Diarization</td>
+<td>Azure Speech Conversation Transcriber splits the WAV into speaker-labeled segments and applies mining term normalization</td>
+</tr>
+<tr>
+<td>3. BERT score</td>
+<td>A Hugging Face BERT encoder embeds Guest-1 and Guest-2 full conversations and returns cosine similarity (0.0–1.0)</td>
+</tr>
+<tr>
+<td>4. Regex extraction</td>
+<td>Pattern matching extracts equipment IDs and protocol keywords, then compares Guest-1 vs Guest-2 for mismatches</td>
+</tr>
+<tr>
+<td>5. UI prompt / alert</td>
+<td>Surface transcript, risk score, extracted entities, and protocol status (PROCEED / HOLD / AMBIGUOUS / Mis Matched) in the dashboard alert and panels</td>
+</tr>
+</tbody>
+</table>
+<p><strong>What this POC achieves:</strong> A reusable haulage radio-compliance starter that proves end-to-end voice AI for pit safety — giving teams about a <strong>20% jumpstart</strong> on future mining voice solutions through shared pipeline, UI, and protocol patterns they can reuse and extend.</p>
+<hr />
+<h2 id="architecture">Architecture</h2>
+<pre><code class="language-text">┌─────────────────────────────────────────────────────────────────┐
+│                        Frontend (React / Vite)                  │
+│                   Upload WAV → call POST /api/process           │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     FastAPI backend (api.py)                    │
+│         Validate WAV → save to input/ → run_pipeline()          │
+└───────────────────────────────┬─────────────────────────────────┘
+                                │
+                                ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      Pipeline (main.py)                         │
+│                                                                 │
+│  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────┐ │
+│  │ 1. Diarization   │──▶│ 2. BERT score    │──▶│ 3. Regex    │ │
+│  │ Azure Speech     │   │ HF BERT encoder  │   │ Entity/status│ │
+│  │ + term mappings  │   │ cosine similarity│   │ extraction   │ │
+│  └────────┬─────────┘   └────────┬─────────┘   └──────┬───────┘ │
+│           │                      │                     │        │
+│           ▼                      ▼                     ▼        │
+│   *_diarized.json         *_bert_score.json      *_regex.json   │
+│   *_grouped.json                                                │
+└─────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+                    output/&lt;audio_stem&gt;/  + UI JSON payload
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Component</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>UI</td>
+<td><code>frontend/</code></td>
+<td>Upload WAV, preview audio, display transcript, BERT score, and protocol status</td>
+</tr>
+<tr>
+<td>API</td>
+<td><code>api.py</code></td>
+<td>Upload, process, results, health; optionally serves <code>frontend/dist</code></td>
+</tr>
+<tr>
+<td>Orchestration</td>
+<td><code>main.py</code></td>
+<td>Runs diarization → BERT → regex in order</td>
+</tr>
+<tr>
+<td>Speech</td>
+<td><code>diarization_code/diarization.py</code></td>
+<td>Azure Conversation Transcriber + alias mapping + speaker grouping</td>
+</tr>
+<tr>
+<td>NLP score</td>
+<td><code>diarization_code/bert_code.py</code></td>
+<td>BERT embeddings + cosine similarity for Guest-1 vs Guest-2</td>
+</tr>
+<tr>
+<td>Rules</td>
+<td><code>regex_code/regex_parser.py</code></td>
+<td>Entity extraction and PROCEED / HOLD / AMBIGUOUS / Mis Matched</td>
+</tr>
+<tr>
+<td>Paths</td>
+<td><code>Common/paths.py</code></td>
+<td>Resolves <code>input/</code> and <code>output/</code> (respects <code>APP_DATA_DIR</code>)</td>
+</tr>
+<tr>
+<td>Config</td>
+<td><code>config.py</code>, <code>config.ini</code>, <code>.env</code></td>
+<td>Azure credentials and BERT model name</td>
+</tr>
+</tbody>
+</table>
+<h3 id="models-and-services">Models and services</h3>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>Purpose in this solution</th>
+<th>Source / default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Azure Speech Conversation Transcriber</td>
+<td>Cloud speech service</td>
+<td>Speech-to-text <strong>and</strong> speaker diarization for two-party radio audio (<code>en-US</code>)</td>
+<td><a href="https://learn.microsoft.com/azure/ai-services/speech-service/">Azure Cognitive Services Speech</a> — requires <code>AZURE_SPEECH_KEY</code> + region or endpoint</td>
+</tr>
+<tr>
+<td><code>bert-large-uncased-whole-word-masking-finetuned-squad</code></td>
+<td>Hugging Face Transformer (encoder)</td>
+<td>Encode Guest-1 and Guest-2 full conversations; compute <strong>cosine similarity</strong> as agreement score. Not used as a Q&amp;A model here.</td>
+<td><a href="https://huggingface.co/bert-large-uncased-whole-word-masking-finetuned-squad">Hugging Face model card</a> — set in <code>config.ini</code> / override with <code>MODEL_NAME</code></td>
+</tr>
+<tr>
+<td>Term mapping (<code>Common/mappings.json</code>)</td>
+<td>Local alias dictionary</td>
+<td>Normalize ASR mishearings (e.g. “Hall track” → “Haul Truck”) before scoring and regex</td>
+<td>Local project file</td>
+</tr>
+<tr>
+<td>Regex patterns (<code>regex_code/regex_parser.py</code>)</td>
+<td>Rule-based extractors</td>
+<td>Pull truck / shovel / pocket / equipment / bench / level / movement / loading / status keywords</td>
+<td>Local project code</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Model → purpose summary</strong></p>
+<table>
+<thead>
+<tr>
+<th>Used for</th>
+<th>Model / service</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Turn audio into speaker-labeled text</td>
+<td>Azure Speech Conversation Transcriber</td>
+</tr>
+<tr>
+<td>Measure semantic agreement between speakers</td>
+<td>BERT encoder + cosine similarity</td>
+</tr>
+<tr>
+<td>Extract mining entities and protocol status</td>
+<td>Regex rules (+ mappings for cleaner text)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="Workable-scenarios">Workable scenarios</h2>
+<p>These three radio clips show how the system decides whether a haul truck entry is safe to continue. Each story is written for a non-technical reader. In the product, you upload the WAV, run the process, and read the protocol status on screen.</p>
+<h3 id="scenario-a-compliant-entry-scenario_a_compliant_entrywav">Scenario A — Compliant entry (<code>scenario_a_compliant_entry.wav</code>)</h3>
+<p><strong>As a</strong> pit safety reviewer, <strong>I want</strong> the system to recognise a complete and clear radio handoff, <strong>so that</strong> a correct entry is marked safe to proceed.</p>
+<p>What happens on the radio:</p>
+<ol>
+<li>The haul truck driver calls shovel <strong>02</strong> and says truck <strong>104</strong> is entering pocket <strong>3</strong> for loading.</li>
+<li>The shovel operator answers clearly: truck <strong>104</strong>, shovel <strong>02</strong>, proceed to pocket <strong>3</strong>.</li>
+<li>The driver confirms: “Proceed, thank you.”</li>
+</ol>
+<p>What the system should show: <strong>PROCEED</strong> — truck, shovel, and pocket match on both sides, and the shovel gives a clear go-ahead.</p>
+<hr />
+<h3 id="scenario-b-unacknowledged-vague-reply-scenario_b_unacknowledged_entrywav">Scenario B — Unacknowledged / vague reply (<code>scenario_b_unacknowledged_entry.wav</code>)</h3>
+<p><strong>As a</strong> pit safety reviewer, <strong>I want</strong> the system to flag a lazy or unclear reply, <strong>so that</strong> nobody treats a vague “yeah, copy” as a real clearance.</p>
+<p>What happens on the radio:</p>
+<ol>
+<li>The haul truck driver calls out: shovel <strong>02</strong>, truck <strong>104</strong> entering pocket <strong>3</strong>.</li>
+<li>There is a long pause.</li>
+<li>The shovel operator answers casually: “Yeah… copy mate.” — not a clear “proceed.”</li>
+</ol>
+<p>What the system should show: <strong>AMBIGUOUS</strong> — the callout is heard, but the reply is soft and unclear, so the entry should not be treated as fully cleared.</p>
+<hr />
+<h3 id="scenario-c-wrong-truck-number-scenario_c_mismatched_identifierwav">Scenario C — Wrong truck number (<code>scenario_c_mismatched_identifier.wav</code>)</h3>
+<p><strong>As a</strong> pit safety reviewer, <strong>I want</strong> the system to catch when the shovel repeats the wrong truck ID, <strong>so that</strong> a mismatched clearance is stopped before the truck moves in.</p>
+<p>What happens on the radio:</p>
+<ol>
+<li>The haul truck driver says: shovel <strong>02</strong>, truck <strong>104</strong> entering pocket <strong>3</strong>.</li>
+<li>The shovel operator answers confidently but names the wrong truck: truck <strong>105</strong>, shovel <strong>02</strong>, proceed to pocket <strong>3</strong>.</li>
+<li>The driver sounds unsure: “Copy that.”</li>
+</ol>
+<p>What the system should show: <strong>Mis Matched</strong> — the shovel approved a different truck number than the one that called in.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Story in one line</th>
+<th>Expected status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>scenario_a_compliant_entry.wav</code></td>
+<td>Clear callout, clear proceed, clear thanks</td>
+<td><strong>PROCEED</strong></td>
+</tr>
+<tr>
+<td><code>scenario_b_unacknowledged_entry.wav</code></td>
+<td>Clear callout, vague “yeah / copy mate” reply</td>
+<td><strong>AMBIGUOUS</strong></td>
+</tr>
+<tr>
+<td><code>scenario_c_mismatched_identifier.wav</code></td>
+<td>Clear callout, shovel says truck <strong>105</strong> instead of <strong>104</strong></td>
+<td><strong>Mis Matched</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Place the WAV files under <code>test_data/</code> (or upload them from the UI) when you want to walk through these stories.</p>
+<hr />
+<h2 id="program-flow">Program flow</h2>
+<p>End-to-end sequence when a user uploads a WAV (UI or <code>POST /api/process</code>):</p>
+<ol>
+<li><strong>Validate upload</strong> — filename present, extension <code>.wav</code>, non-empty, ≤ 100 MB.</li>
+<li><strong>Persist audio</strong> — saved as <code>input/&lt;safe_stem&gt;.wav</code> (<code>job_id</code> = stem).</li>
+<li><strong>Diarization</strong>
+   - Azure Conversation Transcriber streams recognition with speaker IDs.
+   - Near-duplicate segments from the same speaker within a short window are dropped.
+   - Alias mapping normalizes mining terms in text.
+   - Writes <code>*_diarized.json</code> (segment list) and <code>*_grouped.json</code> (messages per speaker).</li>
+<li><strong>BERT score</strong>
+   - Loads Guest-1 and Guest-2 text from the grouped JSON.
+   - Embeds each conversation with the configured BERT model (mean-pooled, L2-normalized).
+   - Cosine similarity → <code>bert_score</code> in <code>[0.0, 1.0]</code>.
+   - Writes <code>*_bert_score.json</code>.</li>
+<li><strong>Regex extraction</strong>
+   - Extracts entities from each guest’s messages.
+   - If both guests state the same field with different values → <strong>Mis Matched</strong> (stops before status).
+   - Otherwise derives status from Guest-2 keywords: HOLD → PROCEED → AMBIGUOUS.
+   - Writes <code>*_regex.json</code>.</li>
+<li><strong>Return payload</strong> — API/UI receive transcriptions, total BERT score, regex result, and output paths.</li>
+</ol>
+<p>CLI entry point (<code>python main.py</code>) runs the same pipeline on <code>DEFAULT_AUDIO_FILE</code> (default: <code>input/mm_noisy_testfile-copy.wav</code>).</p>
+</article>
+  </main>
+  <script>
+    const headings = [...document.querySelectorAll('h2')];
+    const tocHeading = headings.find(h => /table of contents/i.test(h.textContent || ''));
+    if (tocHeading) {
+      let el = tocHeading.nextElementSibling;
+      while (el && el.tagName !== 'OL' && el.tagName !== 'UL') el = el.nextElementSibling;
+      if (el) el.classList.add('toc');
+    }
+  </script>
+</body>
+</html>
