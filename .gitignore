@@ -96,6 +96,7 @@ docker-compose.override.yml
 *.db
 *.sqlite
 *.sqlite3
+*.pptx
 
 # Large Data Folders
 data/
@@ -165,3 +166,5 @@ ruff_cache/
 *config.py
 
 *.zip
+
+/scripts
