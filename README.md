@@ -1,6 +1,6 @@
 # Mining Voice AI
 
-Mining Voice AI processes two-speaker mining radio conversations from WAV audio. It diarizes speakers, measures semantic agreement between them, extracts operational entities (truck, shovel, pocket, bench, level), and returns a protocol status such as **PROCEED**, **HOLD**, **AMBIGUOUS**, or **Mis Matched**.
+Mining Voice AI processes two-speaker mining radio conversations from WAV audio. It diarizes speakers, measures semantic agreement between them, extracts operational entities (truck, shovel, pocket, bench, level), and returns a protocol status such as **PROCEED**, **AMBIGUOUS**, or **Mis Matched**.
 
 The solution ships as a FastAPI backend plus a React (Vite) frontend. You can run the full pipeline from the UI, the REST API, or the CLI (`main.py`).
 
@@ -38,29 +38,29 @@ The solution ships as a FastAPI backend plus a React (Vite) frontend. You can ru
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Frontend (React / Vite)                   │
-│                   Upload WAV → call POST /api/process            │
+│                        Frontend (React / Vite)                  │
+│                   Upload WAV → call POST /api/process           │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     FastAPI backend (api.py)                     │
-│         Validate WAV → save to input/ → run_pipeline()           │
+│                     FastAPI backend (api.py)                    │
+│         Validate WAV → save to input/ → run_pipeline()          │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Pipeline (main.py)                          │
-│                                                                  │
+│                      Pipeline (main.py)                         │
+│                                                                 │
 │  ┌──────────────────┐   ┌──────────────────┐   ┌──────────────┐ │
-│  │ 1. Diarization   │──▶│ 2. BERT score    │──▶│ 3. Regex     │ │
+│  │ 1. Diarization   │──▶│ 2. BERT score    │──▶│ 3. Regex    │ │
 │  │ Azure Speech     │   │ HF BERT encoder  │   │ Entity/status│ │
 │  │ + term mappings  │   │ cosine similarity│   │ extraction   │ │
 │  └────────┬─────────┘   └────────┬─────────┘   └──────┬───────┘ │
-│           │                      │                     │         │
-│           ▼                      ▼                     ▼         │
-│   *_diarized.json         *_bert_score.json      *_regex.json    │
-│   *_grouped.json                                                 │
+│           │                      │                     │        │
+│           ▼                      ▼                     ▼        │
+│   *_diarized.json         *_bert_score.json      *_regex.json   │
+│   *_grouped.json                                                │
 └─────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -74,7 +74,7 @@ The solution ships as a FastAPI backend plus a React (Vite) frontend. You can ru
 | Orchestration | `main.py` | Runs diarization → BERT → regex in order |
 | Speech | `diarization_code/diarization.py` | Azure Conversation Transcriber + alias mapping + speaker grouping |
 | NLP score | `diarization_code/bert_code.py` | BERT embeddings + cosine similarity for Guest-1 vs Guest-2 |
-| Rules | `regex_code/regex_parser.py` | Entity extraction and PROCEED / HOLD / AMBIGUOUS / Mis Matched |
+| Rules | `regex_code/regex_parser.py` | Entity extraction and PROCEED /   / AMBIGUOUS / Mis Matched |
 | Paths | `Common/paths.py` | Resolves `input/` and `output/` (respects `APP_DATA_DIR`) |
 | Config | `config.py`, `config.ini`, `.env` | Azure credentials and BERT model name |
 
@@ -118,7 +118,7 @@ End-to-end sequence when a user uploads a WAV (UI or `POST /api/process`):
 5. **Regex extraction**
    - Extracts entities from each guest’s messages.
    - If both guests state the same field with different values → **Mis Matched** (stops before status).
-   - Otherwise derives status from Guest-2 keywords: HOLD → PROCEED → AMBIGUOUS.
+   - Otherwise derives status from Guest-2 keywords:   → PROCEED → AMBIGUOUS.
    - Writes `*_regex.json`.
 6. **Return payload** — API/UI receive transcriptions, total BERT score, regex result, and output paths.
 
@@ -170,7 +170,7 @@ For an upload named `ack_noisy_testfile.wav`, artifacts are written to `output/a
 | `bench`, `level` | Location-style numbers |
 | `movement`, `loading` | Keyword hits (enter, load, tip, etc.) |
 | `acknowledgment` | Guest-1 ack phrase if found |
-| `status` | `PROCEED` \| `HOLD` \| `AMBIGUOUS` \| `Mis Matched` \| `null` |
+| `status` | `PROCEED` \| ` ` \| `AMBIGUOUS` \| `Mis Matched` \| `null` |
 | `mismatches` | Present only when `flag` is `Mis Matched` |
 
 ---

@@ -161,3 +161,7 @@ ruff_cache/
 
 *config.ini
 *config.py
+
+*.zip
+ppts/
+scripts/
