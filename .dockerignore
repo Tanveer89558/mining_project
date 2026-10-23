@@ -10,7 +10,19 @@ venv
 node_modules
 frontend/node_modules
 frontend/dist
+frontend/src/**/*.test.*
 input
 output
 test_data
 *.log
+*.md
+.cursor
+.vscode
+*.zip
+ppts
+scripts
+Input Audio Files
+Input Audio Files - Copy
+Input Data Files
+**/.DS_Store
+Thumbs.db

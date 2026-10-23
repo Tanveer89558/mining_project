@@ -1,5 +1,6 @@
+# Torch is installed separately in the Dockerfile (large CPU wheel):
+#   pip install --index-url https://download.pytorch.org/whl/cpu "torch==2.14.1"
 transformers
-torch
 azure-cognitiveservices-speech
 fastapi
 uvicorn[standard]

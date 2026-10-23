@@ -4,11 +4,28 @@ This repository builds one image containing the React frontend and FastAPI backe
 
 ## Build the image
 
-Build from the repository root so the Dockerfile can access both `frontend/` and the Python application. One option is Azure Container Registry's remote build:
+Build from the repository root so the Dockerfile can access both `frontend/` and the Python application.
+
+The image uses a `python-deps` stage (system packages + torch + pip deps) and BuildKit cache mounts. After the first build, code-only changes should skip reinstalling torch and other Python packages.
+
+### Fast local iteration (recommended while developing)
+
+Keeps a warm Docker layer cache on your machine:
 
 ```powershell
-az acr build --registry <ACR_NAME> --image mining-voice-ai:latest --file Dockerfile .
+$env:DOCKER_BUILDKIT = "1"
+az acr login --name philipsopenfdacr
+docker build -t philipsopenfdacr.azurecr.io/mining-voice-ai:latest .
+docker push philipsopenfdacr.azurecr.io/mining-voice-ai:latest
 ```
+
+### Remote ACR build
+
+```powershell
+az acr build --registry philipsopenfdacr --image mining-voice-ai:latest --file Dockerfile .
+```
+
+Remote builds upload context every time and reuse cache less reliably than a local daemon. Prefer local build + push for day-to-day code changes; use `az acr build` for clean/CI builds.
 
 Create the Container App from `<ACR_LOGIN_SERVER>/mining-voice-ai:latest`. Configure HTTP ingress on target port `8000` and enable external ingress if the UI should be public.
 

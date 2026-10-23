@@ -1,0 +1,94 @@
+{
+  "title": "Communications overview",
+  "subtitle": "",
+  "kpis": [
+    {
+      "id": "quality",
+      "label": "Communication quality",
+      "value": "84 / 100",
+      "detail": "↑ 6 pts vs previous period",
+      "tone": "positive"
+    },
+    {
+      "id": "exchanges",
+      "label": "Exchanges assessed",
+      "value": "684",
+      "detail": "92% assessment coverage",
+      "tone": "neutral"
+    },
+    {
+      "id": "ai_flagged",
+      "label": "AI-flagged reviews",
+      "value": "12",
+      "detail": "5 high priority",
+      "tone": "warning"
+    },
+    {
+      "id": "breaches",
+      "label": "Confirmed breaches",
+      "value": "7",
+      "detail": "↓ 4 vs previous period",
+      "tone": "positive"
+    },
+    {
+      "id": "coaching",
+      "label": "Coaching completed",
+      "value": "9 / 11",
+      "detail": "82% closed this period",
+      "tone": "neutral"
+    }
+  ],
+  "breachTypes": [
+    { "label": "Invalid response / closure", "percent": 34 },
+    { "label": "Asset identity", "percent": 26 },
+    { "label": "Intent and context", "percent": 19 },
+    { "label": "Readback / hearback", "percent": 13 },
+    { "label": "Transmission integrity", "percent": 8 }
+  ],
+  "qualityTrend": [
+    { "label": "SHIFT 1", "value": 72 },
+    { "label": "SHIFT 2", "value": 74 },
+    { "label": "SHIFT 3", "value": 76 },
+    { "label": "SHIFT 4", "value": 79 },
+    { "label": "SHIFT 5", "value": 81 },
+    { "label": "SHIFT 6", "value": 82 },
+    { "label": "SHIFT 7", "value": 84 }
+  ],
+  "coachingFocus": {
+    "eyebrow": "Supervisor focus",
+    "title": "Coaching priorities",
+    "body": "Readback and explicit closure are the illustrative focus for Crew B. Use short, evidence-based conversations at pre-start.",
+    "cta": "Start evidence review →",
+    "footnote": "Counts from confirmed-breach coaching in the current session"
+  },
+  "aiAnalysisMetrics": [
+    {
+      "id": "processed",
+      "label": "Recordings processed",
+      "value": "683",
+      "detail": "Completed by the AI",
+      "tone": "positive"
+    },
+    {
+      "id": "queue",
+      "label": "Waiting in queue",
+      "value": "57",
+      "detail": "Uploaded and not yet analysed",
+      "tone": "warning"
+    },
+    {
+      "id": "avg_time",
+      "label": "Average time to result",
+      "value": "33 sec",
+      "detail": "Typical wait from upload to summary",
+      "tone": "neutral"
+    },
+    {
+      "id": "confidence",
+      "label": "AI confidence",
+      "value": "85%",
+      "detail": "How sure the model is on average",
+      "tone": "positive"
+    }
+  ]
+}
