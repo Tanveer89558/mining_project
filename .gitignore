@@ -37,6 +37,9 @@ dist/
 # Logs
 *.log
 
+# Notebook
+notes.md
+
 # Environment Variables
 .env
 .env.*
